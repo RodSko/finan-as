@@ -201,6 +201,13 @@ function App() {
     return { totalRemaining, monthsWithDebt };
   }, [monthlyData, invoiceStatus]);
 
+  // Helper to get current month's invoice value
+  const getCurrentMonthForecast = () => {
+    const now = new Date();
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return monthlyData.find(d => d.month === currentMonthStr)?.totalDue || 0;
+  };
+
   // --- HANDLERS (With Persistence) ---
 
   const addTransaction = async (t: Transaction) => {
@@ -342,14 +349,14 @@ function App() {
                     </p>
                 </div>
                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <p className="text-slate-400 text-sm">Pico da Fatura</p>
+                    <p className="text-slate-400 text-sm">Previsão Fatura Atual</p>
                     <p className="text-2xl font-bold text-violet-400">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                            Math.max(...monthlyData.map(d => d.totalDue), 0)
+                            getCurrentMonthForecast()
                         )}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Maior valor mensal
+                    <p className="text-xs text-slate-500 mt-1 capitalize">
+                      Referente a {new Date().toLocaleDateString('pt-BR', { month: 'long' })}
                     </p>
                 </div>
                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
