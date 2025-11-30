@@ -201,11 +201,46 @@ function App() {
     return { totalRemaining, monthsWithDebt };
   }, [monthlyData, invoiceStatus]);
 
-  // Helper to get current month's invoice value
+  // Helper to get current month's invoice value based on Due Date
   const getCurrentMonthForecast = () => {
     const now = new Date();
-    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return monthlyData.find(d => d.month === currentMonthStr)?.totalDue || 0;
+    const currentDay = now.getDate();
+    const currentYear = now.getFullYear();
+    const currentMonthIdx = now.getMonth(); // 0-11
+    
+    let totalForecast = 0;
+
+    // Use cards list to check due day for each card
+    // Note: If a filter is active (selectedCardId), we should only count that card.
+    const cardsToConsider = selectedCardId 
+      ? cards.filter(c => c.id === selectedCardId) 
+      : cards;
+
+    cardsToConsider.forEach(card => {
+      let targetMonthIdx = currentMonthIdx;
+      let targetYear = currentYear;
+
+      // If today is past the due day, we look at next month's invoice
+      if (currentDay > card.dueDay) {
+        targetMonthIdx++;
+        if (targetMonthIdx > 11) {
+          targetMonthIdx = 0;
+          targetYear++;
+        }
+      }
+
+      // Format to YYYY-MM
+      const targetMonthStr = `${targetYear}-${String(targetMonthIdx + 1).padStart(2, '0')}`;
+      
+      // Find data for this month
+      const monthData = monthlyData.find(d => d.month === targetMonthStr);
+      
+      if (monthData && monthData.breakdown[card.id]) {
+        totalForecast += monthData.breakdown[card.id];
+      }
+    });
+
+    return totalForecast;
   };
 
   // --- HANDLERS (With Persistence) ---
@@ -356,7 +391,8 @@ function App() {
                         )}
                     </p>
                     <p className="text-xs text-slate-500 mt-1 capitalize">
-                      Referente a {new Date().toLocaleDateString('pt-BR', { month: 'long' })}
+                      {/* O texto "Referente a..." pode ser confuso pois agora mistura meses diferentes dependendo do vencimento. Melhor simplificar. */}
+                      Próximos vencimentos
                     </p>
                 </div>
                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
