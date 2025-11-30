@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MonthlyData, Card } from '../types';
 import { CheckCircle, Circle, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -112,9 +112,27 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     });
   });
 
-  if (allInvoices.length === 0) return null;
+  // Calculate default invoice (Current or Future)
+  const now = new Date();
+  const currentMonthStr = now.toISOString().slice(0, 7); // "YYYY-MM"
+  const upcomingInvoice = allInvoices.find(inv => inv.data.month >= currentMonthStr);
+  const defaultInvoice = upcomingInvoice || allInvoices[allInvoices.length - 1];
 
-  const firstInvoice = allInvoices[0];
+  // Auto-scroll effect
+  useEffect(() => {
+    if (isExpanded && defaultInvoice) {
+      // Small timeout to wait for the DOM to render/expand
+      const timer = setTimeout(() => {
+        const element = document.getElementById(`invoice-month-${defaultInvoice.data.month}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isExpanded, defaultInvoice]);
+
+  if (allInvoices.length === 0) return null;
 
   return (
     <div className="bg-slate-800 rounded-xl border border-slate-700 shadow-lg overflow-hidden transition-all duration-300">
@@ -130,7 +148,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           <p className="text-xs text-slate-400 mt-1">
             {isExpanded 
               ? 'Visualizando todas as faturas' 
-              : `Próxima: ${firstInvoice.card.name} - ${formatCurrency(firstInvoice.data.breakdown[firstInvoice.card.id])}`
+              : `Destaque: ${defaultInvoice.card.name} (${defaultInvoice.data.displayDate})`
             }
           </p>
         </div>
@@ -142,20 +160,21 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       <div className={`transition-all duration-500 ease-in-out ${isExpanded ? 'opacity-100' : 'opacity-100'}`}>
         {!isExpanded ? (
           <div className="p-4 bg-slate-800/50">
-            {/* Collapsed View: Show only the first invoice */}
+            {/* Collapsed View: Show the calculated default invoice */}
              <div className="mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">
-               {firstInvoice.data.displayDate}
+               {defaultInvoice.data.displayDate}
              </div>
-             {renderInvoiceRow(firstInvoice.data, firstInvoice.card)}
+             {renderInvoiceRow(defaultInvoice.data, defaultInvoice.card)}
              
-             {allInvoices.length > 1 && (
-               <div 
-                 onClick={() => setIsExpanded(true)}
-                 className="mt-3 text-center text-xs text-slate-500 hover:text-indigo-400 cursor-pointer flex items-center justify-center gap-1 py-2 border-t border-slate-700/50"
-               >
-                 Ver mais {allInvoices.length - 1} fatura(s) <ChevronDown className="w-3 h-3" />
-               </div>
-             )}
+             <div 
+               onClick={(e) => {
+                 e.stopPropagation(); 
+                 setIsExpanded(true);
+               }}
+               className="mt-3 text-center text-xs text-slate-500 hover:text-indigo-400 cursor-pointer flex items-center justify-center gap-1 py-2 border-t border-slate-700/50"
+             >
+               Ver histórico completo <ChevronDown className="w-3 h-3" />
+             </div>
           </div>
         ) : (
           <div className="max-h-[500px] overflow-y-auto">
@@ -165,7 +184,11 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 if (activeCardsInMonth.length === 0) return null;
 
                 return (
-                  <div key={data.month} className="p-4 bg-slate-800/50">
+                  <div 
+                    key={data.month} 
+                    id={`invoice-month-${data.month}`} // ID used for auto-scrolling
+                    className="p-4 bg-slate-800/50"
+                  >
                     <div className="flex items-center gap-2 mb-3 sticky top-0 bg-slate-800/95 p-2 -mx-2 rounded-lg backdrop-blur-sm z-10 border border-slate-700/50 shadow-sm">
                        <div className="bg-slate-700 text-slate-200 text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">
                          {data.displayDate}
