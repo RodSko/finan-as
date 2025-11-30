@@ -1,15 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MonthlyData, AIAdvice } from "../types";
 
-const apiKey = process.env.API_KEY;
-
 export const getFinancialAdvice = async (data: MonthlyData[]): Promise<AIAdvice | null> => {
-  if (!apiKey) {
-    console.warn("API Key not found via process.env.API_KEY");
-    return null;
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   // Filter only future data or relevant data to keep context small
   const simplifiedData = data.filter(d => d.totalDue > 0).map(d => ({
