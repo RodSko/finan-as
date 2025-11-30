@@ -6,14 +6,18 @@ import AIAdvisor from './components/AIAdvisor';
 import CardManager from './components/CardManager';
 import InvoiceList from './components/InvoiceList';
 import DataControls from './components/DataControls';
+import Auth from './components/Auth'; // New Component
 import { Transaction, MonthlyData, Card } from './types';
-import { Wallet, FilterX, Loader2 } from 'lucide-react';
+import { Wallet, FilterX, Loader2, LogOut } from 'lucide-react';
 import { dataService } from './services/dataService';
+import { supabase } from './supabaseClient';
+import { Session } from '@supabase/supabase-js';
 
 // Helper to add months to a date string "YYYY-MM"
 const addMonths = (dateStr: string, months: number): string => {
   const [year, month] = dateStr.split('-').map(Number);
-  const date = new Date(year, month - 1 + months, 1);
+  // Use UTC to prevent timezone shifts
+  const date = new Date(Date.UTC(year, month - 1 + months, 1));
   return date.toISOString().slice(0, 7);
 };
 
@@ -25,6 +29,9 @@ const formatDisplayDate = (dateStr: string): string => {
 };
 
 function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [isLoading, setIsLoading] = useState(true);
   const [cards, setCards] = useState<Card[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -36,8 +43,32 @@ function App() {
   // Status of invoices: Key = "cardId-YYYY-MM", Value = true (paid)
   const [invoiceStatus, setInvoiceStatus] = useState<Record<string, boolean>>({});
 
-  // --- INITIAL DATA FETCH ---
+  // --- AUTH INITIALIZATION ---
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      // If user logs out, clear data
+      if (!session) {
+        setCards([]);
+        setTransactions([]);
+        setInvoiceStatus({});
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // --- DATA FETCH ---
   const loadData = async () => {
+    if (!session) return;
+    
     setIsLoading(true);
     try {
       const [fetchedCards, fetchedTransactions, fetchedStatus] = await Promise.all([
@@ -57,28 +88,37 @@ function App() {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (session) {
+      loadData();
+    }
+  }, [session]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   const toggleInvoiceStatus = async (key: string) => {
     // key format: "cardId-YYYY-MM"
-    // Since cardId (UUID) contains hyphens, we cannot simply split by '-'.
-    // The date part "YYYY-MM" is always the last 7 characters.
-    // The separator is the 8th character from the end.
-    
     const monthStr = key.slice(-7); // "YYYY-MM"
     const cardId = key.slice(0, -8); // Everything before "-YYYY-MM"
     
     const newValue = !invoiceStatus[key];
 
     // Optimistic Update
+    const prevStatus = { ...invoiceStatus };
     setInvoiceStatus(prev => ({
       ...prev,
       [key]: newValue
     }));
 
     // Persist
-    await dataService.toggleInvoiceStatus(cardId, monthStr, newValue);
+    const success = await dataService.toggleInvoiceStatus(cardId, monthStr, newValue);
+    
+    // Revert on failure
+    if (!success) {
+      alert("Erro ao salvar status da fatura. Verifique sua conexão.");
+      setInvoiceStatus(prevStatus);
+    }
   };
 
   // Filter transactions based on selection
@@ -217,8 +257,6 @@ function App() {
     
     let totalForecast = 0;
 
-    // Use cards list to check due day for each card
-    // Note: If a filter is active (selectedCardId), we should only count that card.
     const cardsToConsider = selectedCardId 
       ? cards.filter(c => c.id === selectedCardId) 
       : cards;
@@ -227,7 +265,6 @@ function App() {
       let targetMonthIdx = currentMonthIdx;
       let targetYear = currentYear;
 
-      // If today is past the due day, we look at next month's invoice
       if (currentDay > card.dueDay) {
         targetMonthIdx++;
         if (targetMonthIdx > 11) {
@@ -236,10 +273,8 @@ function App() {
         }
       }
 
-      // Format to YYYY-MM
       const targetMonthStr = `${targetYear}-${String(targetMonthIdx + 1).padStart(2, '0')}`;
       
-      // Find data for this month
       const monthData = monthlyData.find(d => d.month === targetMonthStr);
       
       if (monthData && monthData.breakdown[card.id]) {
@@ -298,7 +333,22 @@ function App() {
   
   const selectedDetails = useMemo(() => cards.find(c => c.id === selectedCardId), [cards, selectedCardId]);
 
-  if (isLoading) {
+  // --- RENDERING ---
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-violet-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Auth />;
+  }
+
+  if (isLoading && cards.length === 0 && transactions.length === 0) {
+    // Only show full screen loader on initial data load if empty
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-indigo-400">
@@ -318,16 +368,24 @@ function App() {
             <div className="bg-violet-600 p-2 rounded-lg">
               <Wallet className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-white tracking-tight">CreditFlow</h1>
+            <h1 className="text-xl font-bold text-white tracking-tight hidden sm:block">CreditFlow</h1>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
              <DataControls 
                cards={cards} 
                transactions={transactions} 
                invoiceStatus={invoiceStatus}
                onDataImported={loadData}
              />
+             <div className="h-6 w-px bg-slate-700 mx-1"></div>
+             <button
+               onClick={handleLogout}
+               className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+               title="Sair"
+             >
+               <LogOut className="w-5 h-5" />
+             </button>
           </div>
         </div>
       </header>

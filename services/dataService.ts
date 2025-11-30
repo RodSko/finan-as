@@ -20,11 +20,14 @@ export const dataService = {
   },
 
   async addCard(card: Card): Promise<Card | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const { data, error } = await supabase.from('cards').insert({
       id: card.id,
       name: card.name,
       color: card.color,
-      due_day: card.dueDay
+      due_day: card.dueDay,
+      user_id: user?.id // Attach user ID
     }).select().single();
 
     if (error) {
@@ -75,13 +78,16 @@ export const dataService = {
   },
 
   async addTransaction(t: Transaction): Promise<boolean> {
+    const { data: { user } } = await supabase.auth.getUser();
+
     const { error } = await supabase.from('transactions').insert({
       id: t.id,
       card_id: t.cardId,
       title: t.title,
       total_amount: t.totalAmount,
       installments: t.installments,
-      start_month: t.startMonth
+      start_month: t.startMonth,
+      user_id: user?.id // Attach user ID
     });
 
     if (error) {
@@ -133,11 +139,14 @@ export const dataService = {
   },
 
   async toggleInvoiceStatus(cardId: string, month: string, isPaid: boolean): Promise<boolean> {
+    const { data: { user } } = await supabase.auth.getUser();
+
     const { error } = await supabase.from('invoice_payments').upsert({
       card_id: cardId,
       month: month,
-      is_paid: isPaid
-    }, { onConflict: 'card_id, month' });
+      is_paid: isPaid,
+      user_id: user?.id // Attach user ID
+    }, { onConflict: 'card_id,month' });
 
     if (error) {
       console.error('Error updating invoice status:', error);
@@ -148,6 +157,9 @@ export const dataService = {
 
   // --- BULK IMPORT ---
   async importData(data: { cards: any[], transactions: any[], payments: any[] }): Promise<boolean> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
     try {
       // 1. Upsert Cards
       if (data.cards.length > 0) {
@@ -155,7 +167,8 @@ export const dataService = {
           id: c.id,
           name: c.name,
           color: c.color,
-          due_day: c.dueDay
+          due_day: c.dueDay,
+          user_id: user.id
         }));
         const { error: cardError } = await supabase.from('cards').upsert(dbCards);
         if (cardError) throw cardError;
@@ -169,7 +182,8 @@ export const dataService = {
           title: t.title,
           total_amount: t.totalAmount,
           installments: t.installments,
-          start_month: t.startMonth
+          start_month: t.startMonth,
+          user_id: user.id
         }));
         const { error: transError } = await supabase.from('transactions').upsert(dbTransactions);
         if (transError) throw transError;
@@ -178,15 +192,14 @@ export const dataService = {
       // 3. Upsert Payments
       if (data.payments.length > 0) {
         const dbPayments = data.payments.map(p => {
-            // Check if payment object comes from Excel as normalized or raw
-            // Expecting internal format { cardId, month, isPaid }
             return {
                 card_id: p.cardId,
                 month: p.month,
-                is_paid: p.isPaid
+                is_paid: p.isPaid,
+                user_id: user.id
             };
         });
-        const { error: payError } = await supabase.from('invoice_payments').upsert(dbPayments, { onConflict: 'card_id, month' });
+        const { error: payError } = await supabase.from('invoice_payments').upsert(dbPayments, { onConflict: 'card_id,month' });
         if (payError) throw payError;
       }
 
