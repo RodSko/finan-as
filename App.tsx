@@ -374,7 +374,11 @@ function App() {
               </div>
             )}
 
-            <DebtChart data={monthlyData} cards={visibleCards} />
+            <DebtChart 
+              data={monthlyData} 
+              cards={visibleCards} 
+              onCardSelect={setSelectedCardId}
+            />
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 relative overflow-hidden group">

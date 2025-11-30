@@ -15,9 +15,10 @@ import { MonthlyData, Card } from '../types';
 interface DebtChartProps {
   data: MonthlyData[];
   cards: Card[];
+  onCardSelect?: (cardId: string) => void;
 }
 
-const DebtChart: React.FC<DebtChartProps> = ({ data, cards }) => {
+const DebtChart: React.FC<DebtChartProps> = ({ data, cards, onCardSelect }) => {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -32,6 +33,13 @@ const DebtChart: React.FC<DebtChartProps> = ({ data, cards }) => {
     ...d.breakdown, // spreads { cardId1: 100, cardId2: 200 } into the object
   }));
 
+  const handleCardClick = (dataKey: string) => {
+    // Only trigger if the clicked key corresponds to a valid card ID (not "Total" or other keys)
+    if (onCardSelect && cards.some(c => c.id === dataKey)) {
+      onCardSelect(dataKey);
+    }
+  };
+
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-[350px] bg-slate-800 rounded-xl border border-slate-700 text-slate-400">
@@ -44,7 +52,7 @@ const DebtChart: React.FC<DebtChartProps> = ({ data, cards }) => {
     <div className="w-full h-[450px] bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex flex-col">
       <div className="mb-4">
         <h3 className="text-lg font-semibold text-slate-200">Evolução da Fatura</h3>
-        <p className="text-xs text-slate-400">Área: Por Cartão | Linha Tracejada: Total Geral</p>
+        <p className="text-xs text-slate-400">Clique em um cartão na legenda ou no gráfico para filtrar.</p>
       </div>
       
       <div className="flex-1 min-h-0">
@@ -100,8 +108,10 @@ const DebtChart: React.FC<DebtChartProps> = ({ data, cards }) => {
               iconType="circle"
               formatter={(value) => {
                  const card = cards.find(c => c.id === value);
-                 return <span style={{ color: '#cbd5e1', marginRight: 10 }}>{card ? card.name : value}</span>;
+                 return <span style={{ color: '#cbd5e1', marginRight: 10, cursor: 'pointer' }}>{card ? card.name : value}</span>;
               }}
+              onClick={(e) => handleCardClick(e.dataKey as string)}
+              wrapperStyle={{ cursor: 'pointer' }}
             />
             
             {/* 1. Stacked Areas (Background Volume) */}
@@ -117,6 +127,8 @@ const DebtChart: React.FC<DebtChartProps> = ({ data, cards }) => {
                 fillOpacity={0.6}
                 activeDot={false}
                 animationDuration={1500}
+                onClick={() => handleCardClick(card.id)}
+                cursor="pointer"
               />
             ))}
 
@@ -133,6 +145,8 @@ const DebtChart: React.FC<DebtChartProps> = ({ data, cards }) => {
                 legendType="none" // Hide from legend to avoid duplicates
                 animationDuration={2000}
                 strokeOpacity={0.8}
+                onClick={() => handleCardClick(card.id)}
+                cursor="pointer"
               />
             ))}
 
