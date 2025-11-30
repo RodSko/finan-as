@@ -62,8 +62,13 @@ function App() {
 
   const toggleInvoiceStatus = async (key: string) => {
     // key format: "cardId-YYYY-MM"
-    const [cardId, year, month] = key.split('-');
-    const monthStr = `${year}-${month}`;
+    // Since cardId (UUID) contains hyphens, we cannot simply split by '-'.
+    // The date part "YYYY-MM" is always the last 7 characters.
+    // The separator is the 8th character from the end.
+    
+    const monthStr = key.slice(-7); // "YYYY-MM"
+    const cardId = key.slice(0, -8); // Everything before "-YYYY-MM"
+    
     const newValue = !invoiceStatus[key];
 
     // Optimistic Update
