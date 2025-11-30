@@ -1,0 +1,5 @@
+{
+  "name": "CreditFlow - Gestão de Faturas",
+  "description": "Aplicativo para rastrear gastos de cartão de crédito, visualizar a evolução da dívida com parcelas futuras e obter insights financeiros via IA.",
+  "requestFramePermissions": []
+}
