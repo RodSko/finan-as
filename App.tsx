@@ -5,6 +5,7 @@ import DebtChart from './components/DebtChart';
 import AIAdvisor from './components/AIAdvisor';
 import CardManager from './components/CardManager';
 import InvoiceList from './components/InvoiceList';
+import DataControls from './components/DataControls';
 import { Transaction, MonthlyData, Card } from './types';
 import { Wallet, FilterX, Loader2 } from 'lucide-react';
 import { dataService } from './services/dataService';
@@ -36,25 +37,26 @@ function App() {
   const [invoiceStatus, setInvoiceStatus] = useState<Record<string, boolean>>({});
 
   // --- INITIAL DATA FETCH ---
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [fetchedCards, fetchedTransactions, fetchedStatus] = await Promise.all([
+        dataService.getCards(),
+        dataService.getTransactions(),
+        dataService.getInvoicePayments()
+      ]);
+      
+      setCards(fetchedCards);
+      setTransactions(fetchedTransactions);
+      setInvoiceStatus(fetchedStatus);
+    } catch (error) {
+      console.error("Failed to load data", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        const [fetchedCards, fetchedTransactions, fetchedStatus] = await Promise.all([
-          dataService.getCards(),
-          dataService.getTransactions(),
-          dataService.getInvoicePayments()
-        ]);
-        
-        setCards(fetchedCards);
-        setTransactions(fetchedTransactions);
-        setInvoiceStatus(fetchedStatus);
-      } catch (error) {
-        console.error("Failed to load data", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadData();
   }, []);
 
@@ -313,8 +315,14 @@ function App() {
             </div>
             <h1 className="text-xl font-bold text-white tracking-tight">CreditFlow</h1>
           </div>
-          <div className="text-sm text-slate-400 hidden sm:block">
-            Controle de Cartões Inteligente
+          
+          <div className="flex items-center gap-4">
+             <DataControls 
+               cards={cards} 
+               transactions={transactions} 
+               invoiceStatus={invoiceStatus}
+               onDataImported={loadData}
+             />
           </div>
         </div>
       </header>
@@ -391,7 +399,6 @@ function App() {
                         )}
                     </p>
                     <p className="text-xs text-slate-500 mt-1 capitalize">
-                      {/* O texto "Referente a..." pode ser confuso pois agora mistura meses diferentes dependendo do vencimento. Melhor simplificar. */}
                       Próximos vencimentos
                     </p>
                 </div>

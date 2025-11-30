@@ -20,8 +20,6 @@ export const dataService = {
   },
 
   async addCard(card: Card): Promise<Card | null> {
-    // We assume ID is generated client-side for optimistic UI, or we can omit it to let DB gen it.
-    // Here we use the passed ID to keep UI consistent.
     const { data, error } = await supabase.from('cards').insert({
       id: card.id,
       name: card.name,
@@ -128,7 +126,6 @@ export const dataService = {
     
     const statusMap: Record<string, boolean> = {};
     data.forEach((item: any) => {
-      // Key format must match what App.tsx expects: "cardId-YYYY-MM"
       const key = `${item.card_id}-${item.month}`;
       statusMap[key] = item.is_paid;
     });
@@ -136,7 +133,6 @@ export const dataService = {
   },
 
   async toggleInvoiceStatus(cardId: string, month: string, isPaid: boolean): Promise<boolean> {
-    // Upsert: if exists update, if not insert
     const { error } = await supabase.from('invoice_payments').upsert({
       card_id: cardId,
       month: month,
@@ -148,5 +144,56 @@ export const dataService = {
       return false;
     }
     return true;
+  },
+
+  // --- BULK IMPORT ---
+  async importData(data: { cards: any[], transactions: any[], payments: any[] }): Promise<boolean> {
+    try {
+      // 1. Upsert Cards
+      if (data.cards.length > 0) {
+        const dbCards = data.cards.map(c => ({
+          id: c.id,
+          name: c.name,
+          color: c.color,
+          due_day: c.dueDay
+        }));
+        const { error: cardError } = await supabase.from('cards').upsert(dbCards);
+        if (cardError) throw cardError;
+      }
+
+      // 2. Upsert Transactions
+      if (data.transactions.length > 0) {
+        const dbTransactions = data.transactions.map(t => ({
+          id: t.id,
+          card_id: t.cardId,
+          title: t.title,
+          total_amount: t.totalAmount,
+          installments: t.installments,
+          start_month: t.startMonth
+        }));
+        const { error: transError } = await supabase.from('transactions').upsert(dbTransactions);
+        if (transError) throw transError;
+      }
+
+      // 3. Upsert Payments
+      if (data.payments.length > 0) {
+        const dbPayments = data.payments.map(p => {
+            // Check if payment object comes from Excel as normalized or raw
+            // Expecting internal format { cardId, month, isPaid }
+            return {
+                card_id: p.cardId,
+                month: p.month,
+                is_paid: p.isPaid
+            };
+        });
+        const { error: payError } = await supabase.from('invoice_payments').upsert(dbPayments, { onConflict: 'card_id, month' });
+        if (payError) throw payError;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Import failed:', error);
+      return false;
+    }
   }
 };
